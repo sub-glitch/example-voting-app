@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:18.20.8-slim
 
 # add curl for healthcheck
 RUN apt-get update && \
@@ -20,6 +20,9 @@ COPY . .
 
 ENV PORT=80
 EXPOSE 80
+
+RUN useradd --create-home --uid 10001 app
+USER app
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "server.js"]
