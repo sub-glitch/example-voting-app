@@ -1,87 +1,62 @@
-# version is now using "compose spec"
-# v2 and v3 are now combined!
-# docker-compose v1.27+ required
+# Replaces the upstream docker-compose.yml. Apps listen on 8080 (non-root cannot bind port 80 reliably).
+# Vote UI:   http://localhost:8080
+# Result UI: http://localhost:8081
+name: voting-app
 
 services:
   vote:
-    build: 
-      context: ./vote
-      target: final
+    build: ./vote
+    ports: ["8080:8080"]
     depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck: 
-      test: ["CMD", "curl", "-f", "http://localhost"]
-      interval: 15s
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080', timeout=3)"]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-    volumes:
-     - ./vote:/usr/local/app
-    ports:
-      - "8080:80"
-    networks:
-      - front-tier
-      - back-tier
+      retries: 5
+    networks: [front-tier, back-tier]
 
   result:
     build: ./result
+    ports: ["8081:8080"]
     depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8081:80"
-    networks:
-      - front-tier
-      - back-tier
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [front-tier, back-tier]
 
   worker:
-    build:
-      context: ./worker
+    build: ./worker
     depends_on:
-      redis:
-        condition: service_healthy 
-      db:
-        condition: service_healthy 
-    networks:
-      - back-tier
+      redis: { condition: service_healthy }
+      db: { condition: service_healthy }
+    networks: [back-tier]
 
   redis:
-    image: redis:alpine
-    volumes:
-      - "./healthchecks:/healthchecks"
+    image: redis:7.4.1-alpine
     healthcheck:
-      test: /healthchecks/redis.sh
-      interval: "5s"
-    networks:
-      - back-tier
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [back-tier]
 
   db:
-    image: postgres:15-alpine
+    image: postgres:16.4-alpine
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres   # upstream demo credential, hardcoded in the app source
     volumes:
-      - "db-data:/var/lib/postgresql/data"
-      - "./healthchecks:/healthchecks"
+      - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: /healthchecks/postgres.sh
-      interval: "5s"
-    networks:
-      - back-tier
-
-  # this service runs once to seed the database with votes
-  # it won't run unless you specify the "seed" profile
-  # docker compose --profile seed up -d
-  seed:
-    build: ./seed-data
-    profiles: ["seed"]
-    depends_on:
-      vote:
-        condition: service_healthy 
-    networks:
-      - front-tier
-    restart: "no"
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [back-tier]
 
 volumes:
   db-data:

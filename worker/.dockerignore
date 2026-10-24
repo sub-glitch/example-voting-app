@@ -1,9 +1,12 @@
 .git
 .gitignore
-node_modules
-bin
-obj
-__pycache__
-*.pyc
 .env
 *.md
+Dockerfile
+.dockerignore
+node_modules
+__pycache__
+*.pyc
+bin
+obj
+tests

@@ -1,28 +1,9 @@
-FROM node:18.20.8-slim
-
-# add curl for healthcheck
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl tini && \
-    rm -rf /var/lib/apt/lists/*
-
+FROM node:20.18.0-slim
+ENV NODE_ENV=production PORT=8080
 WORKDIR /usr/local/app
-
-# have nodemon available for local dev use (file watching)
-RUN npm install -g nodemon
-
 COPY package*.json ./
-
-RUN npm ci && \
- npm cache clean --force && \
- mv /usr/local/app/node_modules /node_modules
-
-COPY . .
-
-ENV PORT=80
-EXPOSE 80
-
-RUN useradd --create-home --uid 10001 app
-USER app
-
-ENTRYPOINT ["/usr/bin/tini", "--"]
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --chown=10001:10001 . .
+USER 10001
+EXPOSE 8080
 CMD ["node", "server.js"]
