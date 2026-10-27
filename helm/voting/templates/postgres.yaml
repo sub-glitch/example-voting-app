@@ -1,0 +1,90 @@
+# The apps connect to the hostname "db", so the Service name is fixed.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  labels:
+    {{- include "voting.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgres.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgres.password | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-data
+  labels:
+    {{- include "voting.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    {{- include "voting.labels" . | nindent 4 }}
+    app.kubernetes.io/name: db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # RWO volume: the old pod must stop before the new one mounts it
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: db
+        app.kubernetes.io/part-of: voting-app
+        app: db
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70          # "postgres" user in the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - { name: pg, containerPort: 5432 }
+          envFrom:
+            - secretRef: { name: db-credentials }
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres"] }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: db-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    {{- include "voting.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: db
+  ports:
+    - { name: pg, port: 5432, targetPort: pg }

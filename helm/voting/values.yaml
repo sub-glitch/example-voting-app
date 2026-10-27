@@ -1,0 +1,54 @@
+global:
+  # ghcr.io/<lowercase-github-username>. CI overrides this with --set.
+  registry: ghcr.io/CHANGEME
+  # Only needed if your GHCR packages are PRIVATE:
+  #   kubectl create secret docker-registry ghcr-pull -n voting --docker-server=ghcr.io \
+  #     --docker-username=<user> --docker-password=<PAT with read:packages>
+  imagePullSecrets: []   # e.g. [{name: ghcr-pull}]
+
+vote:
+  image: { repository: voting-vote, tag: latest }   # CI sets tag = commit SHA
+  replicas: 2
+  port: 8080
+  readinessPath: /          # set to /does-not-exist to demo a bad release via a failing probe
+  service: { type: LoadBalancer, port: 80 }
+  autoscaling: { enabled: false, min: 2, max: 6, cpuPercent: 70 }
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+result:
+  image: { repository: voting-result, tag: latest }
+  replicas: 1
+  port: 8080
+  readinessPath: /
+  service: { type: LoadBalancer, port: 80 }
+  autoscaling: { enabled: false, min: 1, max: 3, cpuPercent: 70 }
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+worker:
+  image: { repository: voting-worker, tag: latest }
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+redis:
+  image: redis:7.4.1-alpine
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+postgres:
+  image: postgres:16.4-alpine
+  # NOTE: the upstream app source hardcodes postgres/postgres, so this must stay "postgres" unless you
+  # patch result/server.js and worker/Program.cs to read env vars (see README stretch goals).
+  # It is the public upstream demo credential, not a real secret.
+  user: postgres
+  password: postgres
+  storage: 2Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }

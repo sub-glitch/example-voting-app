@@ -1,0 +1,68 @@
+{{- range $name := list "vote" "result" }}
+{{- $v := index $.Values $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "voting.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  {{- if not $v.autoscaling.enabled }}
+  replicas: {{ $v.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/part-of: voting-app
+        app: {{ $name }}
+    spec:
+      {{- include "voting.pullSecrets" $ | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.global.registry }}/{{ $v.image.repository }}:{{ $v.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: {{ $v.port }} }
+          env:
+            - { name: PORT, value: {{ $v.port | quote }} }
+          readinessProbe:
+            httpGet: { path: {{ $v.readinessPath }}, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "voting.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  type: {{ $v.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - { name: http, port: {{ $v.service.port }}, targetPort: http }
+{{- end }}

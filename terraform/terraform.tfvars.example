@@ -1,0 +1,6 @@
+# cp terraform.tfvars.example terraform.tfvars   (terraform.tfvars is git-ignored)
+region             = "eu-west-1"
+cluster_name       = "capstone"
+github_repo        = "CHANGEME-username/example-voting-app"
+budget_email       = "CHANGEME@example.com"
+budget_usd         = 60

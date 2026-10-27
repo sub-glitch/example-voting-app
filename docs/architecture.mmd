@@ -1,0 +1,19 @@
+flowchart LR
+  dev[Developer] -->|git push| gh[GitHub repo]
+  gh --> ci
+  subgraph ci[GitHub Actions]
+    t[Test] --> s[Compose smoke test] --> b[Build] --> tv[Trivy scan] --> p[Push]
+  end
+  p -->|image tag = commit SHA| ghcr[(GHCR)]
+  ci -->|OIDC role, no stored keys| aws[AWS IAM]
+  ci -->|helm upgrade --atomic| eks
+  tf[Terraform] -->|creates| eks
+  subgraph eks[EKS cluster in default VPC]
+    vote[vote] --> redis[(Redis)]
+    redis --> worker[worker]
+    worker --> pg[(PostgreSQL)]
+    result[result] --> pg
+  end
+  user((Voter)) --> vote
+  user --> result
+  ghcr -.pull.-> eks

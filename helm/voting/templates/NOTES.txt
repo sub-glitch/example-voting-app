@@ -1,0 +1,4 @@
+Voting app installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Get the public addresses (the load balancer takes 2-3 minutes to appear):
+  kubectl get svc vote result -n {{ .Release.Namespace }}
